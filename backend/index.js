@@ -11,8 +11,7 @@ const { resubmitJournal } = require('./controllers/resubmitController');
 const { requireAuth, requireAdmin } = require('./middleware/requireAuth');
 // node-cron removed: does not work on serverless platforms. The account deletion cron
 // is replaced by a Supabase Scheduled Edge Function (see HOSTING.md for setup).
-const { createClient } = require('@supabase/supabase-js');
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const { supabase } = require('./utils/supabase');
 
 // ── Shared Storage Helpers ──────────────────────────────────────────
 // Extract a bare storage path from either a full Supabase URL or an already-bare path.

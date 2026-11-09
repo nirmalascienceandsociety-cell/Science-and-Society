@@ -11,6 +11,10 @@ compatibility_flags = ["nodejs_compat", "nodejs_compat_populate_process_env"]
 [observability]
 enabled = true
 
+[vars]
+PORT = "3001"
+SUPABASE_URL = "https://gmcenokgsyicwarkicjs.supabase.co"
+
 # ── Local Development ────────────────────────────────────────────────────────
 # DO NOT put real secrets here. Use `wrangler secret put SECRET_NAME` to store
 # secrets in Cloudflare's encrypted secret store for production.

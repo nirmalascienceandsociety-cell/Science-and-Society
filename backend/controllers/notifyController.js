@@ -1,5 +1,5 @@
 const { sendMail } = require('../utils/mailer');
-const { createClient } = require('@supabase/supabase-js');
+const { supabase } = require('../utils/supabase');
 const { 
   generateUploadNotification,
   generateUploadConfirmationStudent,
@@ -25,8 +25,6 @@ const {
   generateForceUnassignNotification,
   escHtml
 } = require('../utils/emailTemplates');
-
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 const getEmailForUser = async (userId) => {
   if (!userId) return null;

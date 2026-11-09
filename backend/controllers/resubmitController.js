@@ -1,9 +1,6 @@
-const { createClient } = require('@supabase/supabase-js');
+const { supabase } = require('../utils/supabase');
 const { sendMail } = require('../utils/mailer');
 const { generateReworkResubmittedNotification, escHtml } = require('../utils/emailTemplates');
-
-// Service-role client — bypasses RLS
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 const notifyAdminsInApp = async (title, message, link) => {
   const { data: admins } = await supabase.from('profiles').select('id').eq('role', 'admin');

@@ -1,10 +1,8 @@
-const { createClient } = require('@supabase/supabase-js');
+const { supabase } = require('../utils/supabase');
 const { sendMail } = require('../utils/mailer');
 const { generateOTPTemplate, generateEmailChangedTemplate } = require('../utils/emailTemplates');
 const crypto = require('crypto');
 require('dotenv').config();
-
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 // Use cryptographically secure random number generator for OTP
 const generateOTP = () => crypto.randomInt(100000, 1000000).toString();
