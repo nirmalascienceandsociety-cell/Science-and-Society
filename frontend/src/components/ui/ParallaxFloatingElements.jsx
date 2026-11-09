@@ -7,6 +7,10 @@ import { useDeviceDetect } from '../../lib/useDeviceDetect';
    - On mobile/low-end: Render smaller blobs, reduced blurs.
    - On mobile/low-end: Bypass useSpring, use scrollYProgress directly.
    - will-change: transform on wrappers
+   MOBILE SCROLL FIX:
+   - Container has pointerEvents: none AND touch-action: none so it NEVER
+     intercepts swipe/scroll gestures from the user. The blobs are purely
+     decorative and must not block 1-finger scrolling on any device.
    ───────────────────────────────────────────────────────────────────────── */
 
 export function ParallaxFloatingElements() {
@@ -38,7 +42,13 @@ function ParallaxCore({ isMobile }) {
 
   return (
     <div style={{
-      position: 'fixed', inset: 0, zIndex: 1, pointerEvents: 'none', overflow: 'hidden'
+      position: 'fixed', inset: 0, zIndex: 1,
+      // MOBILE SCROLL FIX: pointerEvents + touch-action none ensures these purely-decorative
+      // blobs NEVER consume touch events. Without touch-action: none, some Android
+      // browsers treat the fixed overlay as a scroll target, forcing 2-finger scroll.
+      pointerEvents: 'none',
+      touchAction: 'none',
+      overflow: 'hidden'
     }}>
       {/* Top-left aurora blob */}
       <motion.div style={{

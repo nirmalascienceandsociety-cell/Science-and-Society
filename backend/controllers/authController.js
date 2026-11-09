@@ -33,17 +33,26 @@ const validateNotTempEmail = (email) => {
 
   // Strict whitelist of popular allowed providers
   const allowedProviders = [
-    'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 
-    'icloud.com', 'aol.com', 'protonmail.com', 'zoho.com', 'proton.me'
+    'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com',
+    'icloud.com', 'aol.com', 'protonmail.com', 'zoho.com', 'proton.me',
+    'live.com', 'msn.com', 'ymail.com'
   ];
 
-  // Allow standard academic extensions broadly
-  const isAcademic = 
-    domain.endsWith('.edu') || 
-    domain.includes('.edu.') || 
-    domain.endsWith('.ac.in') || 
-    domain.endsWith('.ac.uk') || 
-    domain.includes('.ac.');
+  // SEC-005 Fix: Use strict endsWith() only — never .includes() for domain checks.
+  // e.g. user@phish.edu.attacker.com would pass includes('.edu.') but correctly
+  // fails endsWith('.edu') and all the checks below.
+  const isAcademic =
+    domain.endsWith('.edu') ||
+    domain.endsWith('.ac.in') ||
+    domain.endsWith('.ac.uk') ||
+    domain.endsWith('.ac.nz') ||
+    domain.endsWith('.ac.za') ||
+    domain.endsWith('.edu.au') ||
+    domain.endsWith('.edu.sg') ||
+    domain.endsWith('.edu.my') ||
+    domain.endsWith('.edu.ph') ||
+    domain.endsWith('.edu.bd') ||
+    domain.endsWith('.edu.np');
 
   return allowedProviders.includes(domain) || isAcademic;
 };
@@ -81,11 +90,13 @@ exports.sendRegisterOTP = async (req, res) => {
   }
 
   // Check 60-second cooldown to prevent spamming OTP requests
+  // SEC-B: Include purpose in query so register/reset/email-change OTPs don't collide
   const { data: existingOtp } = await supabase
     .from('custom_otps')
     .select('created_at, expires_at')
     .eq('email', email)
-    .single();
+    .eq('purpose', 'register')
+    .maybeSingle();
 
   if (existingOtp) {
     const existingExpiry = new Date(existingOtp.expires_at).getTime();
@@ -98,11 +109,11 @@ exports.sendRegisterOTP = async (req, res) => {
   const otp = generateOTP();
   const expiresAt = new Date(Date.now() + 10 * 60000).toISOString(); // 10 mins
 
-  // Upsert OTP to database
+  // Upsert OTP to database — keyed by (email, purpose) to prevent flow cross-contamination
   const hashedOtp = hashOTP(otp);
   const { error } = await supabase
     .from('custom_otps')
-    .upsert({ email, otp: hashedOtp, expires_at: expiresAt });
+    .upsert({ email, purpose: 'register', otp: hashedOtp, expires_at: expiresAt }, { onConflict: 'email,purpose' });
 
   if (error) {
     console.error('DB Error:', error);
@@ -156,6 +167,7 @@ exports.verifyRegisterOTP = async (req, res) => {
     .from('custom_otps')
     .select('*')
     .eq('email', email)
+    .eq('purpose', 'register')
     .single();
 
   if (error || !data || new Date() > new Date(data.expires_at)) {
@@ -165,9 +177,9 @@ exports.verifyRegisterOTP = async (req, res) => {
   if (!timingSafeCompare(data.otp, hashOTP(otp))) {
     const attempts = (data.attempts || 0) + 1;
     if (attempts >= 3) {
-      await supabase.from('custom_otps').delete().eq('email', email);
+      await supabase.from('custom_otps').delete().eq('email', email).eq('purpose', 'register');
     } else {
-      await supabase.from('custom_otps').update({ attempts }).eq('email', email);
+      await supabase.from('custom_otps').update({ attempts }).eq('email', email).eq('purpose', 'register');
     }
     return res.status(400).json({ error: 'Invalid or expired OTP. Please check your code.' });
   }
@@ -212,8 +224,8 @@ exports.verifyRegisterOTP = async (req, res) => {
     return res.status(500).json({ error: 'Failed to create profile. Please try again.' });
   }
 
-  // Delete OTP
-  await supabase.from('custom_otps').delete().eq('email', email);
+  // Delete OTP — scope to purpose so other in-flight OTPs for this email are unaffected
+  await supabase.from('custom_otps').delete().eq('email', email).eq('purpose', 'register');
 
   res.status(200).json({ message: 'User created successfully' });
 };
@@ -233,19 +245,18 @@ exports.sendResetOTP = async (req, res) => {
 
   if (existingUser) {
     if (existingUser.status === 'suspended' || existingUser.status === 'inactive') {
-      return res.status(400).json({ 
-        error: 'This account has been suspended or deactivated. Password reset is disabled. Please contact support for assistance.' 
-      });
+      // SEC-006: Return same generic message regardless of account state to prevent enumeration
+      await new Promise(resolve => setTimeout(resolve, Math.random() * 300 + 400));
+      return res.status(200).json({ message: 'If this email is registered and eligible, a reset code has been sent.' });
     }
     if (existingUser.status === 'pending') {
-      return res.status(400).json({ 
-        error: 'Your account registration is currently pending administrator approval.' 
-      });
+      await new Promise(resolve => setTimeout(resolve, Math.random() * 300 + 400));
+      return res.status(200).json({ message: 'If this email is registered and eligible, a reset code has been sent.' });
     }
   } else {
-    // Deliberate delay to prevent timing attacks
+    // SEC-006: Same message for unknown email — prevents account enumeration
     await new Promise(resolve => setTimeout(resolve, Math.random() * 500 + 500));
-    return res.status(404).json({ error: 'No account found with this email address. Please check the email or create a new account.' });
+    return res.status(200).json({ message: 'If this email is registered and eligible, a reset code has been sent.' });
   }
 
   const otp = generateOTP();
@@ -254,7 +265,7 @@ exports.sendResetOTP = async (req, res) => {
 
   const { error } = await supabase
     .from('custom_otps')
-    .upsert({ email, otp: hashedOtp, expires_at: expiresAt, attempts: 0 });
+    .upsert({ email, purpose: 'reset', otp: hashedOtp, expires_at: expiresAt, attempts: 0 }, { onConflict: 'email,purpose' });
 
   if (error) return res.status(500).json({ error: 'Failed to generate OTP' });
 
@@ -277,6 +288,7 @@ exports.verifyResetOTP = async (req, res) => {
     .from('custom_otps')
     .select('*')
     .eq('email', email)
+    .eq('purpose', 'reset')
     .single();
 
   // CRITICAL: Check for error/missing data BEFORE accessing data fields to prevent TypeError crash
@@ -288,16 +300,16 @@ exports.verifyResetOTP = async (req, res) => {
   const isWrongOtp = !timingSafeCompare(data.otp, hashOTP(otp));
 
   if (isExpired) {
-    await supabase.from('custom_otps').delete().eq('email', email);
+    await supabase.from('custom_otps').delete().eq('email', email).eq('purpose', 'reset');
     return res.status(400).json({ error: 'Invalid or expired OTP' });
   }
 
   if (isWrongOtp) {
     const attempts = (data.attempts || 0) + 1;
     if (attempts >= 3) {
-      await supabase.from('custom_otps').delete().eq('email', email);
+      await supabase.from('custom_otps').delete().eq('email', email).eq('purpose', 'reset');
     } else {
-      await supabase.from('custom_otps').update({ attempts }).eq('email', email);
+      await supabase.from('custom_otps').update({ attempts }).eq('email', email).eq('purpose', 'reset');
     }
     return res.status(400).json({ error: 'Invalid or expired OTP' });
   }
@@ -321,7 +333,7 @@ exports.verifyResetOTP = async (req, res) => {
 
   if (updateError) return res.status(400).json({ error: updateError.message });
 
-  await supabase.from('custom_otps').delete().eq('email', email);
+  await supabase.from('custom_otps').delete().eq('email', email).eq('purpose', 'reset');
   res.status(200).json({ message: 'Password updated successfully' });
 };
 
@@ -349,7 +361,7 @@ exports.sendEmailChangeOTP = async (req, res) => {
   const expiresAt = new Date(Date.now() + 10 * 60000).toISOString();
   const hashedOtp = hashOTP(otp);
 
-  const { error } = await supabase.from('custom_otps').upsert({ email: newEmail, otp: hashedOtp, expires_at: expiresAt });
+  const { error } = await supabase.from('custom_otps').upsert({ email: newEmail, purpose: 'email_change', otp: hashedOtp, expires_at: expiresAt }, { onConflict: 'email,purpose' });
   if (error) return res.status(500).json({ error: 'Failed to generate OTP' });
 
   const html = generateOTPTemplate(otp, 'email_change');
@@ -370,7 +382,7 @@ exports.verifyEmailChangeOTP = async (req, res) => {
   const { data: profile } = await supabase.from('profiles').select('email').eq('id', userId).single();
   const oldEmail = profile?.email;
 
-  const { data, error } = await supabase.from('custom_otps').select('*').eq('email', newEmail).single();
+  const { data, error } = await supabase.from('custom_otps').select('*').eq('email', newEmail).eq('purpose', 'email_change').single();
 
   // Guard: check for missing/errored OTP record BEFORE accessing any fields.
   // This prevents unsafe optional chaining causing isExpired to silently
@@ -385,7 +397,7 @@ exports.verifyEmailChangeOTP = async (req, res) => {
 
   if (isExpired || isWrongOtp) {
     // Delete OTP on any failure (prevents brute-force)
-    await supabase.from('custom_otps').delete().eq('email', newEmail);
+    await supabase.from('custom_otps').delete().eq('email', newEmail).eq('purpose', 'email_change');
     return res.status(400).json({ error: 'Invalid or expired OTP' });
   }
 
@@ -395,7 +407,7 @@ exports.verifyEmailChangeOTP = async (req, res) => {
 
   // Update Profile Email
   await supabase.from('profiles').update({ email: newEmail }).eq('id', userId);
-  await supabase.from('custom_otps').delete().eq('email', newEmail);
+  await supabase.from('custom_otps').delete().eq('email', newEmail).eq('purpose', 'email_change');
 
   // Send notification to old email
   if (oldEmail && oldEmail !== newEmail) {

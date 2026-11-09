@@ -1,0 +1,5 @@
+# Cloudflare Pages SPA fallback — route all non-file requests to index.html
+# This is equivalent to Vercel's rewrites for React Router.
+# Without this, refreshing on any route (e.g. /student/journals) returns a 404.
+/*    /index.html   200
+

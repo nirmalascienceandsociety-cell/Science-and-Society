@@ -18,7 +18,7 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes('framer-motion')) return 'framer';
-          if (id.includes('three') || id.includes('@react-three')) return 'three';
+          // three.js chunk removed — @react-three/* and three are no longer in dependencies
           if (id.includes('node_modules')) {
             if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) return 'vendor';
             return 'modules';

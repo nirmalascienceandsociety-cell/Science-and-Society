@@ -174,15 +174,12 @@ export default function PublishedIssues() {
                     </div>
                   </div>
                   <div className="card-content" style={{ flex: 1 }}>
-                    {issue.abstract?.startsWith('http') ? (
-                      <a href={issue.abstract} target="_blank" rel="noreferrer" className="btn btn-primary">
-                        Download Abstract
-                      </a>
-                    ) : (
-                      <p className="text-sm text-muted" style={{ lineHeight: 1.6 }}>
-                        {issue.abstract}
-                      </p>
-                    )}
+                    {/* SEC-004: Never use abstract as href — it's plain user text, not a URL.
+                        Always render as text to prevent stored XSS / phishing via javascript:
+                        or data: URLs. If a PDF link is needed, store a separate validated path. */}
+                    <p className="text-sm text-muted" style={{ lineHeight: 1.6 }}>
+                      {issue.abstract || 'No abstract available.'}
+                    </p>
                   </div>
                   <div className="card-footer" style={{ paddingTop: '1rem', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span className="text-xs font-semibold text-warning" style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>

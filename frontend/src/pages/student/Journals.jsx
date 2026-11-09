@@ -400,13 +400,9 @@ export function StudentJournalDetail() {
                 <>
                   <div>
                     <p className="text-xs text-muted font-semibold" style={{ textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>Abstract</p>
-                    {journal.abstract?.startsWith('http') ? (
-                      <a href={journal.abstract} target="_blank" rel="noreferrer" className="btn btn-outline btn-sm" style={{ display: 'inline-flex', marginTop: '0.25rem' }}>
-                        Download Abstract
-                      </a>
-                    ) : (
-                      <p className="text-sm">{journal.abstract}</p>
-                    )}
+                    {/* SEC-004: Never use abstract as href — render as plain text only.
+                        Abstract is user-supplied text, not a URL. */}
+                    <p className="text-sm">{journal.abstract || 'No abstract provided.'}</p>
                   </div>
                   <div className="grid-2">
                     <div>

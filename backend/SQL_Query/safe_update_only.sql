@@ -84,6 +84,8 @@ ALTER TABLE public.journals ADD COLUMN IF NOT EXISTS prev_reviewer_name text;
 ALTER TABLE public.journals ADD COLUMN IF NOT EXISTS volume_number text;
 ALTER TABLE public.journals ADD COLUMN IF NOT EXISTS issue_number text;
 ALTER TABLE public.journals ADD COLUMN IF NOT EXISTS published_at timestamptz;
+ALTER TABLE public.journals ADD COLUMN IF NOT EXISTS views_count integer not null default 0;
+ALTER TABLE public.journals ADD COLUMN IF NOT EXISTS citations_count integer not null default 0;
 
 ALTER TABLE public.paper_requests ADD COLUMN IF NOT EXISTS affiliation text;
 ALTER TABLE public.paper_requests ADD COLUMN IF NOT EXISTS reason text;
@@ -160,7 +162,11 @@ SELECT
   j.issue_number,
   j.published_at,
   j.created_at,
-  j.author_name
+  j.author_name,
+  -- SEC-F: Include metrics so FutureIssues/PublishedPapers can use the safe view
+  -- without touching the base table. file_url is intentionally excluded.
+  COALESCE(j.views_count, 0)     AS views_count,
+  COALESCE(j.citations_count, 0) AS citations_count
 FROM public.journals j
 WHERE j.status = 'published';
 
@@ -169,6 +175,14 @@ GRANT SELECT ON public.published_issues TO anon, authenticated;
 
 -- Drop the now-redundant direct-table open policy (the view is the only public read path)
 DROP POLICY IF EXISTS "Anyone can read published journals" ON public.journals;
+
+-- SEC-F: Performance index — queries filtered by status (view + admin panel) benefit greatly
+CREATE INDEX IF NOT EXISTS idx_journals_status ON public.journals(status);
+
+-- SEC-P: Remove anon INSERT on paper_requests — all inserts now go via service-role backend.
+-- The /api/notify/paper-request backend route handles validation, rate-limiting, and honeypot.
+DROP POLICY IF EXISTS "Anyone can insert paper_requests" ON public.paper_requests;
+DROP POLICY IF EXISTS "Anon can insert paper_requests" ON public.paper_requests;
 
 
 -- ============================================================
@@ -1098,8 +1112,6 @@ $$;
 REVOKE EXECUTE ON FUNCTION public.admin_compile_issue(text, text, uuid[]) FROM public;
 GRANT  EXECUTE ON FUNCTION public.admin_compile_issue(text, text, uuid[]) TO authenticated;
 
-COMMIT;
-
 
 -- ============================================================
 -- ADMIN PROMOTION RPC
@@ -1230,6 +1242,22 @@ GRANT EXECUTE ON FUNCTION public.publish_pre_compile(uuid, text, text, jsonb, te
 
 -- M5 Fix: Add attempts tracking column to custom_otps table
 ALTER TABLE public.custom_otps ADD COLUMN IF NOT EXISTS attempts integer NOT NULL DEFAULT 0;
+
+-- SEC-B: OTP purpose segregation — prevents register/reset/email-change OTPs from
+-- overwriting each other when the same email is used for multiple flows simultaneously.
+-- The (email, purpose) pair is now the unique key instead of email alone.
+ALTER TABLE public.custom_otps ADD COLUMN IF NOT EXISTS purpose text NOT NULL DEFAULT 'register';
+
+-- Drop old single-email unique constraint (if it exists) and replace with composite key.
+-- We use DO block so the script is safe to re-run even after the index already exists.
+DO $$ BEGIN
+  -- Remove the old unique index on just email (may be named differently on different DBs)
+  DROP INDEX IF EXISTS custom_otps_email_key;
+  DROP INDEX IF EXISTS custom_otps_pkey; -- skip if pkey is on (email)
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS custom_otps_email_purpose ON public.custom_otps(email, purpose);
 
 -- M9 Fix: Revoke direct client access to resubmit_journal RPC (Express backend owns resubmissions)
 REVOKE EXECUTE ON FUNCTION public.resubmit_journal(uuid, text, text, text, text, text, text, text, text, int, jsonb, text) FROM public, anon, authenticated;
@@ -1362,4 +1390,18 @@ END;
 $$;
 REVOKE EXECUTE ON FUNCTION public.unassign_reviewer_from_journal(uuid, uuid) FROM public;
 GRANT  EXECUTE ON FUNCTION public.unassign_reviewer_from_journal(uuid, uuid) TO authenticated;
+
+-- Atomic RPC function to increment views safely
+CREATE OR REPLACE FUNCTION public.increment_paper_views(p_journal_id UUID)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  UPDATE public.journals
+  SET views_count = COALESCE(views_count, 0) + 1
+  WHERE id = p_journal_id AND status = 'published';
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.increment_paper_views(UUID) TO anon, authenticated, service_role;
+
+COMMIT;
+
 

@@ -8,7 +8,7 @@ on:
 
 jobs:
   backend:
-    name: Backend — Audit & Lint
+    name: Backend — Audit, Lint & Test
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -55,3 +55,59 @@ jobs:
           VITE_API_URL: https://placeholder-api.example.com
           VITE_PERMANENT_ADMIN_EMAIL: ci@example.com
         run: npm run build
+
+  # ── Optional: auto-deploy to Cloudflare on main branch push ──────────────
+  # Uncomment and add CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID to GitHub
+  # repository secrets to enable automatic deployment.
+  #
+  # deploy-backend:
+  #   name: Deploy Backend → Cloudflare Workers
+  #   needs: [backend]
+  #   if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+  #   runs-on: ubuntu-latest
+  #   defaults:
+  #     run:
+  #       working-directory: backend
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-node@v4
+  #       with:
+  #         node-version: 22
+  #         cache: npm
+  #         cache-dependency-path: backend/package-lock.json
+  #     - run: npm ci
+  #     - name: Deploy via Wrangler
+  #       uses: cloudflare/wrangler-action@v3
+  #       with:
+  #         apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  #         accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  #         workingDirectory: backend
+  #
+  # deploy-frontend:
+  #   name: Deploy Frontend → Cloudflare Pages
+  #   needs: [frontend]
+  #   if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-node@v4
+  #       with:
+  #         node-version: 22
+  #         cache: npm
+  #         cache-dependency-path: frontend/package-lock.json
+  #     - name: Install & Build
+  #       working-directory: frontend
+  #       env:
+  #         VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+  #         VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+  #         VITE_API_URL: ${{ secrets.VITE_API_URL }}
+  #         VITE_PERMANENT_ADMIN_EMAIL: ${{ secrets.VITE_PERMANENT_ADMIN_EMAIL }}
+  #       run: |
+  #         npm ci
+  #         npm run build
+  #     - name: Deploy to Pages
+  #       uses: cloudflare/wrangler-action@v3
+  #       with:
+  #         apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  #         accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  #         command: pages deploy frontend/dist --project-name=ss-frontend

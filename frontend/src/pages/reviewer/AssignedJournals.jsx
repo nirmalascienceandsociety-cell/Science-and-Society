@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
-import { FileText, ArrowLeft, Download, CheckCircle, Upload, Check, X, AlertTriangle, Edit3, Calendar, Clock, ArrowRight, Eye, AlertCircle } from 'lucide-react'
+import { FileText, ArrowLeft, Download, CheckCircle, Upload, Check, X, AlertTriangle, Edit3, Calendar, Eye, AlertCircle } from 'lucide-react'
 import { useToast } from '../../components/Toast'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
@@ -31,41 +31,6 @@ const getStatusLabel = (status) => statusLabels[status] ?? 'In Progress'
 // Statuses that are admin-only and must not be shown to reviewers
 const adminOnlyStatuses = new Set(['approved', 'accepted', 'published', 'rejected'])
 
-// Helper: format authors & co-authors
-function getAuthorsDisplay(j) {
-  if (!j) return { authorStr: '', coAuthorsStr: '' }
-  let authorsArr = []
-  if (Array.isArray(j.authors)) {
-    authorsArr = j.authors
-  } else if (typeof j.authors === 'string') {
-    try {
-      const parsed = JSON.parse(j.authors)
-      if (Array.isArray(parsed)) authorsArr = parsed
-    } catch {
-      // not JSON array
-    }
-  }
-
-  if (authorsArr.length > 0) {
-    const mainList = authorsArr
-      .filter(a => typeof a === 'object' && a !== null ? (a.is_corresponding || a.role === 'corresponding' || a.role === 'first_author') : true)
-      .map(a => typeof a === 'string' ? a : a.name)
-      .filter(Boolean)
-
-    const coList = authorsArr
-      .filter(a => typeof a === 'object' && a !== null && (a.role === 'co_author' || (!a.is_corresponding && a.role !== 'corresponding' && a.role !== 'first_author')))
-      .map(a => typeof a === 'string' ? a : a.name)
-      .filter(Boolean)
-
-    const authorStr = mainList.length > 0 ? mainList.join(', ') : (j.author_name || j.profiles?.name || '')
-    const coAuthorsStr = coList.join(', ')
-    return { authorStr, coAuthorsStr }
-  }
-
-  const authorStr = j.author_name || j.profiles?.name || ''
-  return { authorStr, coAuthorsStr: '' }
-}
-
 /* ── Assigned Journals List ───────────────────────────────────────── */
 export function AssignedJournals() {
   const { user, profile } = useAuth()
@@ -90,7 +55,7 @@ export function AssignedJournals() {
         accepted_at,
         created_at,
         journals (
-          id, title, abstract, keywords, status, review_level, resubmission_count, created_at, authors, author_name, profiles(name)
+          id, title, abstract, keywords, status, review_level, resubmission_count, created_at
         )
       `)
       .eq('reviewer_id', user.id)
@@ -326,28 +291,14 @@ export function AssignedJournals() {
                     {j.title}
                   </h3>
 
-                  {(() => {
-                    const { authorStr, coAuthorsStr } = getAuthorsDisplay(j)
-                    return (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontSize: '0.8rem' }}>
-                        {authorStr && (
-                          <div style={{ color: 'var(--muted-foreground)' }}>
-                            <strong style={{ color: 'var(--foreground)', fontWeight: 600 }}>Author(s): </strong>{authorStr}
-                          </div>
-                        )}
-                        {coAuthorsStr && (
-                          <div style={{ color: 'var(--muted-foreground)' }}>
-                            <strong style={{ color: 'var(--foreground)', fontWeight: 600 }}>Co-Author(s): </strong>{coAuthorsStr}
-                          </div>
-                        )}
-                        {j.keywords && (
-                          <div style={{ color: 'var(--muted-foreground)' }}>
-                            <strong style={{ color: 'var(--foreground)', fontWeight: 600 }}>Keywords: </strong>{j.keywords}
-                          </div>
-                        )}
+                  {/* SEC-D: Author identity hidden from reviewer — blind review integrity */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontSize: '0.8rem' }}>
+                    {j.keywords && (
+                      <div style={{ color: 'var(--muted-foreground)' }}>
+                        <strong style={{ color: 'var(--foreground)', fontWeight: 600 }}>Keywords: </strong>{j.keywords}
                       </div>
-                    )
-                  })()}
+                    )}
+                  </div>
                 </div>
 
                 {/* Right Action Column */}
@@ -509,7 +460,7 @@ export function ReviewJournal() {
   async function fetchJournal() {
     setLoading(true)
     const [journalRes, reviewRes, assignmentRes] = await Promise.all([
-      supabase.from('journals').select('id, title, abstract, status, review_level, resubmission_count, created_at, file_url, keywords, authors, author_name, profiles(name)').eq('id', id).single(),
+      supabase.from('journals').select('id, title, abstract, status, review_level, resubmission_count, created_at, file_url, keywords').eq('id', id).single(),
       supabase.from('reviews').select('*').eq('journal_id', id).eq('reviewer_id', user?.id).maybeSingle(),
       supabase.from('assignments').select('id, accepted_at').eq('journal_id', id).eq('reviewer_id', user?.id).maybeSingle(),
     ])
@@ -696,41 +647,25 @@ export function ReviewJournal() {
             <div className="card-title" style={{ fontSize: '1.6rem', marginBottom: '0.5rem', color: 'var(--foreground)' }}>{journal.title}</div>
           </div>
           <div className="card-content space-y-6">
-            {/* Authors, Co-Authors & Keywords */}
-            {(() => {
-              const { authorStr, coAuthorsStr } = getAuthorsDisplay(journal)
-              return (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem', fontSize: '0.92rem', paddingBottom: '0.25rem' }}>
-                  {authorStr && (
-                    <div>
-                      <span style={{ fontWeight: 700, color: 'var(--foreground)' }}>Author(s): </span>
-                      <span style={{ color: 'var(--muted-foreground)' }}>{authorStr}</span>
-                    </div>
-                  )}
-                  {coAuthorsStr && (
-                    <div>
-                      <span style={{ fontWeight: 700, color: 'var(--foreground)' }}>Co-Authors: </span>
-                      <span style={{ color: 'var(--muted-foreground)' }}>{coAuthorsStr}</span>
-                    </div>
-                  )}
-                  {journal.keywords && (
-                    <div>
-                      <span style={{ fontWeight: 700, color: 'var(--foreground)' }}>Keywords: </span>
-                      <span style={{ color: 'var(--muted-foreground)' }}>{journal.keywords}</span>
-                    </div>
-                  )}
+            {/* SEC-D: Author identity is intentionally hidden from the reviewer.
+                Blind review integrity: reviewers must not see author names.
+                Keywords are shown to aid relevance assessment. */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem', fontSize: '0.92rem', paddingBottom: '0.25rem' }}>
+              {journal.keywords && (
+                <div>
+                  <span style={{ fontWeight: 700, color: 'var(--foreground)' }}>Keywords: </span>
+                  <span style={{ color: 'var(--muted-foreground)' }}>{journal.keywords}</span>
                 </div>
-              )
-            })()}
+              )}
+            </div>
             <div>
               <p style={{ fontSize: '0.9rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem', color: 'var(--foreground)' }}>Abstract</p>
-              {journal.abstract?.startsWith('http') ? (
-                <a href={journal.abstract} target="_blank" rel="noreferrer" className="btn btn-outline" style={{ display: 'inline-flex', marginTop: '0.25rem' }}>
-                  <Download size={16} style={{ marginRight: '0.5rem' }} /> Download Abstract
-                </a>
-              ) : (
-                <p style={{ fontSize: '1.05rem', lineHeight: '1.75', color: 'var(--foreground)' }}>{journal.abstract}</p>
-              )}
+              {/* SEC-004: Never use abstract as href — render as plain text only.
+                  Abstract is user-supplied text, not a URL. Using it as href enables
+                  stored XSS via javascript: or data: URIs. */}
+              <p style={{ fontSize: '1.05rem', lineHeight: '1.75', color: 'var(--foreground)' }}>
+                {journal.abstract || 'No abstract provided.'}
+              </p>
             </div>
             {journal.file_url && (
               <div style={{ paddingTop: '1rem' }}>

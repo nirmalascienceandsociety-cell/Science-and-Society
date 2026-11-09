@@ -70,6 +70,7 @@ const notifyAdminsInApp = async (title, message, link) => {
 };
 
 exports.notifyUpload = async (req, res) => {
+  try {
   const { studentName, journalTitle } = req.body;
   if (!validateString(journalTitle, 500)) return res.status(400).json({ error: 'Invalid journal title' });
   
@@ -114,9 +115,14 @@ exports.notifyUpload = async (req, res) => {
   await notifyAdminsInApp('New Paper Submission', `A new paper "${journalTitle}" was submitted by ${studentName}.`, '/admin/reviewers');
 
   res.status(200).json({ success: true, adminSent });
+  } catch (err) {
+    console.error('notifyUpload Error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 };
 
 exports.notifyAssign = async (req, res) => {
+  try {
   if (!await checkAdmin(req.user?.id)) return res.status(403).json({ error: 'Forbidden' });
   const { reviewerId, reviewerName, journalTitle, isRework } = req.body;
   const reviewerEmail = await getEmailForUser(reviewerId);
@@ -129,9 +135,14 @@ exports.notifyAssign = async (req, res) => {
   const inAppMessage = isRework ? `You have been assigned to review the reworked paper "${journalTitle}".` : `You have been assigned to review "${journalTitle}".`;
   await insertNotification(reviewerId, inAppTitle, inAppMessage, '/reviewer/assigned');
   res.status(sent ? 200 : 500).json({ success: sent });
+  } catch (err) {
+    console.error('notifyAssign Error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 };
 
 exports.notifyUnassignReviewer = async (req, res) => {
+  try {
   if (!await checkAdmin(req.user?.id)) return res.status(403).json({ error: 'Forbidden' });
   const { reviewerId, reviewerName, journalTitle } = req.body;
   const reviewerEmail = await getEmailForUser(reviewerId);
@@ -147,9 +158,14 @@ exports.notifyUnassignReviewer = async (req, res) => {
     '/reviewer/assigned'
   );
   res.status(sent ? 200 : 500).json({ success: sent });
+  } catch (err) {
+    console.error('notifyUnassignReviewer Error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 };
 
 exports.notifyReview = async (req, res) => {
+  try {
   const { journalId, studentId, reviewerName, journalTitle, decision } = req.body;
 
   // Security: journalId is mandatory — reject calls that omit it to prevent ownership bypass
@@ -195,9 +211,14 @@ exports.notifyReview = async (req, res) => {
   }
 
   res.status(200).json({ success: true, sent });
+  } catch (err) {
+    console.error('notifyReview Error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 };
 
 exports.notifyResubmit = async (req, res) => {
+  try {
   const { journalId, studentName, journalTitle } = req.body;
 
   // Security: journalId is mandatory — reject calls that omit it to prevent ownership bypass
@@ -227,6 +248,10 @@ exports.notifyResubmit = async (req, res) => {
   );
 
   res.status(200).json({ success: true, sent });
+  } catch (err) {
+    console.error('notifyResubmit Error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 };
 
 // Helper: resolve journal author details and email from profile or authors metadata
@@ -264,6 +289,7 @@ const resolveJournalRecipient = async (journalId, studentId, studentName, journa
 };
 
 exports.notifyDecision = async (req, res) => {
+  try {
   if (!await checkAdmin(req.user?.id)) return res.status(403).json({ error: 'Forbidden' });
   const { journalId, studentId, studentName, journalTitle, status } = req.body;
 
@@ -279,27 +305,33 @@ exports.notifyDecision = async (req, res) => {
   }
 
   res.status(sent ? 200 : 500).json({ success: sent });
+  } catch (err) {
+    console.error('notifyDecision Error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 };
 
 exports.notifyBan = async (req, res) => {
+  try {
   if (!await checkAdmin(req.user?.id)) return res.status(403).json({ error: 'Forbidden' });
   const { userId, userName, reason } = req.body;
   if (!userId) return res.status(400).json({ error: 'User ID required' });
 
-  // Security: Resolve email server-side — never trust caller-supplied email.
-  // This matches the notifyAccountDeleted pattern and prevents a compromised
-  // admin session from redirecting ban notifications to arbitrary addresses.
   const resolvedEmail = await getEmailForUser(userId);
   if (!resolvedEmail) return res.status(404).json({ error: 'Could not resolve user email' });
 
   const html = generateBanNotification(esc(userName), esc(reason));
   const sent = await sendMail(resolvedEmail, 'Your Account Has Been Suspended', html);
-  // Also notify main admin
   await sendMail(process.env.EMAIL_USER, `User Suspended: ${esc(userName)}`, html);
   res.status(sent ? 200 : 500).json({ success: sent });
+  } catch (err) {
+    console.error('notifyBan Error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 };
 
 exports.notifyUnban = async (req, res) => {
+  try {
   if (!await checkAdmin(req.user?.id)) return res.status(403).json({ error: 'Forbidden' });
   const { userId, userName } = req.body;
   if (!userId) return res.status(400).json({ error: 'User ID required' });
@@ -311,16 +343,20 @@ exports.notifyUnban = async (req, res) => {
   const html = generateUnbanNotification(esc(userName));
   const sent = await sendMail(resolvedEmail, 'Your Account Has Been Reinstated', html);
   res.status(sent ? 200 : 500).json({ success: sent });
+  } catch (err) {
+    console.error('notifyUnban Error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 };
 
 exports.notifyAccountDeleted = async (req, res) => {
+  try {
   // requireAdmin middleware already verified this, but double-check for defense-in-depth
   if (!await checkAdmin(req.user?.id)) return res.status(403).json({ error: 'Forbidden' });
   const { userId, userName, role } = req.body;
   if (!userId) return res.status(400).json({ error: 'User ID required' });
   
   // Security: Resolve email from DB using userId — never trust caller-provided email
-  // This prevents a malicious admin from sending deletion notices to arbitrary addresses
   const { data: profile } = await supabase
     .from('profiles')
     .select('email, name')
@@ -328,12 +364,10 @@ exports.notifyAccountDeleted = async (req, res) => {
     .single();
   
   // Fall back to caller-provided data only for the already-deleted user
-  // (profile may no longer exist if deletion already happened)
   const resolvedEmail = profile?.email;
   const resolvedName = profile?.name || userName;
   
   if (!resolvedEmail) {
-    // User is already deleted, just notify admin
     const html = generateAccountDeletedNotification(esc(resolvedName), esc(role));
     await sendMail(process.env.EMAIL_USER, `Account Deleted: ${esc(resolvedName)} (${esc(role)})`, html);
     return res.status(200).json({ success: true });
@@ -343,9 +377,14 @@ exports.notifyAccountDeleted = async (req, res) => {
   await sendMail(resolvedEmail, 'Your Account Has Been Removed', html);
   await sendMail(process.env.EMAIL_USER, `Account Deleted: ${esc(resolvedName)} (${esc(role)})`, html);
   res.status(200).json({ success: true });
+  } catch (err) {
+    console.error('notifyAccountDeleted Error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 };
 
 exports.notifyReviewerApproved = async (req, res) => {
+  try {
   if (!await checkAdmin(req.user?.id)) return res.status(403).json({ error: 'Forbidden' });
   const { userId, userName } = req.body;
   if (!userId) return res.status(400).json({ error: 'User ID required' });
@@ -356,9 +395,14 @@ exports.notifyReviewerApproved = async (req, res) => {
   const html = generateReviewerApprovalNotification(esc(userName));
   const sent = await sendMail(resolvedEmail, 'Reviewer Application Approved', html);
   res.status(sent ? 200 : 500).json({ success: sent });
+  } catch (err) {
+    console.error('notifyReviewerApproved Error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 };
 
 exports.notifyReviewerRejected = async (req, res) => {
+  try {
   if (!await checkAdmin(req.user?.id)) return res.status(403).json({ error: 'Forbidden' });
   const { userId, userName } = req.body;
   if (!userId) return res.status(400).json({ error: 'User ID required' });
@@ -369,12 +413,17 @@ exports.notifyReviewerRejected = async (req, res) => {
   const html = generateReviewerRejectionNotification(esc(userName));
   const sent = await sendMail(resolvedEmail, 'Reviewer Application Status', html);
   res.status(sent ? 200 : 500).json({ success: sent });
+  } catch (err) {
+    console.error('notifyReviewerRejected Error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 };
 
 
 
 // ── Notify student: paper has been sent to reviewer ───────────────────
 exports.notifySentForReview = async (req, res) => {
+  try {
   if (!await checkAdmin(req.user?.id)) return res.status(403).json({ error: 'Forbidden' });
   const { journalId, studentId, studentName, journalTitle } = req.body;
   
@@ -388,10 +437,15 @@ exports.notifySentForReview = async (req, res) => {
     await insertNotification(targetStudentId, 'Paper Sent for Review', `Your paper "${targetTitle}" has been assigned to a reviewer.`, '/student/journals');
   }
   res.status(200).json({ success: true, sent });
+  } catch (err) {
+    console.error('notifySentForReview Error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 };
 
 // ── Notify student: rework/revision requested ─────────────────────────
 exports.notifyRework = async (req, res) => {
+  try {
   if (!await checkAdmin(req.user?.id)) return res.status(403).json({ error: 'Forbidden' });
   const { journalId, studentId, studentName, journalTitle, adminComments } = req.body;
   
@@ -405,10 +459,15 @@ exports.notifyRework = async (req, res) => {
     await insertNotification(targetStudentId, 'Revision Requested', `Please revise your paper "${targetTitle}" and resubmit.`, '/student/journals');
   }
   res.status(200).json({ success: true, sent });
+  } catch (err) {
+    console.error('notifyRework Error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 };
 
 // ── Notify student: paper published ───────────────────────────────────
 exports.notifyPublish = async (req, res) => {
+  try {
   if (!await checkAdmin(req.user?.id)) return res.status(403).json({ error: 'Forbidden' });
   const { journalId, studentId, studentName, journalTitle, paperId } = req.body;
   
@@ -425,10 +484,15 @@ exports.notifyPublish = async (req, res) => {
     await insertNotification(targetStudentId, 'Paper Published!', `Your paper "${targetTitle}" is now live on the platform.`, `/paper/${paperId || journalId}`);
   }
   res.status(200).json({ success: true, sent });
+  } catch (err) {
+    console.error('notifyPublish Error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 };
 
 // ── Notify student: paper deleted ─────────────────────────────────────
 exports.notifyPaperDeleted = async (req, res) => {
+  try {
   if (!await checkAdmin(req.user?.id)) return res.status(403).json({ error: 'Forbidden' });
   const { journalId, studentId, studentName, journalTitle } = req.body;
   
@@ -450,30 +514,31 @@ exports.notifyPaperDeleted = async (req, res) => {
 
   const html = generatePaperDeletedNotification(esc(targetName || 'Author'), esc(targetTitle));
   await sendMail(studentEmail, 'Notice: Your Published Paper Has Been Removed', html);
-  // Also send an in-app notification
   await insertNotification(targetStudentId, 'Paper Removed', `Your published paper "${targetTitle}" has been permanently removed by the administration.`, '/student/journals');
   res.status(200).json({ success: true });
+  } catch (err) {
+    console.error('notifyPaperDeleted Error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 };
 
 // ── Notify admin: new full-paper request ──────────────────────────────
 exports.notifyPaperRequest = async (req, res) => {
+  try {
   const { requesterName, requesterEmail, journalTitle, journalId, affiliation, reason, website_url } = req.body;
   
   // HONEYPOT: If the hidden website_url field is filled out, this is a spam bot.
-  // Silently drop the request but return success so the bot doesn't retry.
   if (website_url) {
     console.log(`Blocked spam request from bot for paper: ${journalTitle}`);
     return res.status(200).json({ success: true, honeypot: true });
   }
 
-  // Input validation — prevent bots from sending oversized strings or malformed emails
   if (!validateEmail(requesterEmail)) return res.status(400).json({ error: 'Invalid email address' });
   if (!validateString(requesterName, 100)) return res.status(400).json({ error: 'Invalid requester name (max 100 chars)' });
   if (!validateString(journalTitle, 300)) return res.status(400).json({ error: 'Invalid journal title (max 300 chars)' });
   if (affiliation && typeof affiliation === 'string' && affiliation.length > 200) return res.status(400).json({ error: 'Affiliation too long (max 200 chars)' });
   if (reason && typeof reason === 'string' && reason.length > 1000) return res.status(400).json({ error: 'Reason too long (max 1000 chars)' });
 
-  // M4 & C-2 Fix: Require journalId and verify journal exists AND is published before processing paper request
   if (!journalId) return res.status(400).json({ error: 'journalId is required' });
 
   let isPublished = false;
@@ -507,7 +572,6 @@ exports.notifyPaperRequest = async (req, res) => {
     esc(requesterName), esc(requesterEmail), esc(journalTitle), esc(affiliation), esc(reason)
   );
   
-  // Find all admins and store in-app notifications
   await notifyAdminsInApp(
     'New Paper Request',
     `${requesterName} requested the full PDF of "${journalTitle}".`,
@@ -516,21 +580,31 @@ exports.notifyPaperRequest = async (req, res) => {
 
   const sent = await sendMail(process.env.EMAIL_USER, 'New Full Paper Request', html);
   res.status(sent ? 200 : 500).json({ success: sent });
+  } catch (err) {
+    console.error('notifyPaperRequest Error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 };
 
 
 // ── Notify requester: paper request rejected ───────────────────────────
 exports.notifyPaperRequestRejected = async (req, res) => {
+  try {
   if (!await checkAdmin(req.user?.id)) return res.status(403).json({ error: 'Forbidden' });
   const { requesterName, requesterEmail, journalTitle } = req.body;
   if (!requesterEmail) return res.status(400).json({ error: 'Requester email required' });
   const html = generatePaperRequestRejectedNotification(esc(requesterName), esc(journalTitle));
   const sent = await sendMail(requesterEmail, 'Your Paper Request — Science & Society', html);
   res.status(sent ? 200 : 500).json({ success: sent });
+  } catch (err) {
+    console.error('notifyPaperRequestRejected Error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 };
 
 // ── Notify requester: paper delivered ───────────────────────────
 exports.notifyPaperDelivery = async (req, res) => {
+  try {
   // requireAdmin middleware already verified this
   if (!await checkAdmin(req.user?.id)) return res.status(403).json({ error: 'Forbidden' });
   const { requesterName, requesterEmail, journalTitle, fileUrl } = req.body;
@@ -556,9 +630,6 @@ exports.notifyPaperDelivery = async (req, res) => {
     return res.status(404).json({ error: 'No file associated with this paper in the database.' });
   }
 
-  // Extract the storage path from either a full URL or a bare path.
-  // Old records: "https://xxx.supabase.co/storage/v1/object/public/journals/uuid/file.pdf"
-  // New records: "uuid/file.pdf"
   const getStoragePath = (url) => {
     const marker = '/journals/';
     const idx = url.indexOf(marker);
@@ -568,8 +639,6 @@ exports.notifyPaperDelivery = async (req, res) => {
 
   const expectedPath = getStoragePath(expectedFileUrl);
 
-  // Generate a signed URL server-side using the service-role key (bypasses bucket public flag).
-  // Signed URL is valid for 10 minutes — enough to fetch and attach in the email.
   const { data: signedData, error: signErr } = await supabase.storage
     .from('journals')
     .createSignedUrl(expectedPath, 600);
@@ -591,7 +660,6 @@ exports.notifyPaperDelivery = async (req, res) => {
     </div>
   `;
 
-  // Attach the file using the signed URL (valid for 10 minutes — plenty of time for Nodemailer)
   const attachments = [
     {
       filename: `${journalTitle.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`,
@@ -601,10 +669,15 @@ exports.notifyPaperDelivery = async (req, res) => {
 
   const sent = await sendMail(requesterEmail, 'Full Paper Delivery — Science & Society', html, attachments);
   res.status(sent ? 200 : 500).json({ success: sent });
+  } catch (err) {
+    console.error('notifyPaperDelivery Error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 };
 
 // ── Contact Form (Public) ───────────────────────────────────────────────
 exports.notifyContact = async (req, res) => {
+  try {
   const { name, email, subject, message, website_url } = req.body;
   
   // Honeypot check: automated spammers fill this hidden field
@@ -639,10 +712,15 @@ exports.notifyContact = async (req, res) => {
   }
 
   res.status(emailSent ? 200 : 500).json({ success: emailSent });
+  } catch (err) {
+    console.error('notifyContact Error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 };
 
 // ── Admin Reply to Contact Form ─────────────────────────────────────────
 exports.replyContact = async (req, res) => {
+  try {
   if (!await checkAdmin(req.user?.id)) return res.status(403).json({ error: 'Forbidden' });
   const { notificationId, recipientEmail, originalSubject, originalMessage, replyMessage } = req.body;
 
@@ -669,7 +747,6 @@ exports.replyContact = async (req, res) => {
     targetSubject = notif.metadata?.subject || originalSubject;
     targetMessage = notif.metadata?.full_message || originalMessage;
   } else {
-    // Fallback: verify that a contact notification matching the email exists
     const { data: matchingNotif } = await supabase
       .from('notifications')
       .select('id')
@@ -689,11 +766,16 @@ exports.replyContact = async (req, res) => {
   const emailSent = await sendMail(targetEmail, `Re: ${esc(targetSubject || 'Your Message to Science & Society')}`, html);
   
   res.status(emailSent ? 200 : 500).json({ success: emailSent });
+  } catch (err) {
+    console.error('replyContact Error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 };
 
 // ── Notify admin that reviewer declined an assignment ──────────────────────
 // Called by the reviewer (requireAuth, not requireAdmin)
 exports.notifyReviewerDeclinedAssignment = async (req, res) => {
+  try {
   const { journalTitle, reviewerName } = req.body;
   if (!validateString(journalTitle, 500)) return res.status(400).json({ error: 'Invalid journal title' });
 
@@ -718,11 +800,16 @@ exports.notifyReviewerDeclinedAssignment = async (req, res) => {
   );
 
   res.status(sent ? 200 : 500).json({ success: sent });
+  } catch (err) {
+    console.error('notifyReviewerDeclinedAssignment Error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 };
 
 // ── Notify reviewer that admin force-unassigned them after acceptance ──────
 // Called by admin (requireAdmin)
 exports.notifyForceUnassign = async (req, res) => {
+  try {
   if (!await checkAdmin(req.user?.id)) return res.status(403).json({ error: 'Forbidden' });
   const { reviewerId, reviewerName, journalTitle } = req.body;
   if (!validateString(journalTitle, 500)) return res.status(400).json({ error: 'Invalid journal title' });
@@ -746,5 +833,9 @@ exports.notifyForceUnassign = async (req, res) => {
   );
 
   res.status(sent ? 200 : 500).json({ success: sent });
+  } catch (err) {
+    console.error('notifyForceUnassign Error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 };
 

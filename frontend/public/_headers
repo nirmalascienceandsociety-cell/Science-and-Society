@@ -1,0 +1,17 @@
+/*
+  # Security headers for all responses from Cloudflare Pages
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+  X-XSS-Protection: 1; mode=block
+  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.workers.dev https://*.pages.dev https://*.sentry.io https://*.ingest.sentry.io; worker-src blob:; object-src blob: 'self'; frame-src 'self' blob: https://*.supabase.co; base-uri 'self'; form-action 'self'; frame-ancestors 'none';
+
+# Cache static hashed assets aggressively (Vite builds generate unique content hashes)
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Never cache HTML so new deployments update immediately for users
+/index.html
+  Cache-Control: no-cache, no-store, must-revalidate

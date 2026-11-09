@@ -321,13 +321,8 @@ export function ReviewReportDetail() {
             <div className="card-content space-y-4">
               <div>
                 <p className="text-xs font-semibold text-muted" style={{ textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>Abstract</p>
-                {journal.abstract?.startsWith('http') ? (
-                  <a href={journal.abstract} target="_blank" rel="noreferrer" className="btn btn-outline btn-sm" style={{ display: 'inline-flex', marginTop: '0.25rem' }}>
-                    <Download size={14} /> Download Abstract
-                  </a>
-                ) : (
-                  <p className="text-sm" style={{ lineHeight: '1.6' }}>{journal.abstract}</p>
-                )}
+                {/* SEC-004: Abstract is plain user text — never use as href to prevent stored XSS. */}
+                <p className="text-sm" style={{ lineHeight: '1.6' }}>{journal.abstract || 'No abstract provided.'}</p>
               </div>
               {journal.file_url && (
                 <div style={{

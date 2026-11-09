@@ -2,6 +2,12 @@
 .env
 .env.local
 .env.*.local
+# Cloudflare Wrangler local dev secrets (equivalent to .env for wrangler dev)
+.dev.vars
 
 # Dependencies
 node_modules/
+
+# Wrangler build output
+.wrangler/
+

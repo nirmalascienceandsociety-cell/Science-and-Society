@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Copy, Check, Quote, BookOpen, Download } from 'lucide-react'
+import { X, Copy, Check, Quote } from 'lucide-react'
 import { useToast } from './Toast'
 
 export default function CitationModal({ isOpen, onClose, paper }) {

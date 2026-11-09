@@ -1,5 +1,7 @@
 // Central API base URL - reads from environment variable so it works in both dev and production.
-const _configuredUrl = import.meta.env.VITE_API_URL;
+const _rawUrl = import.meta.env.VITE_API_URL;
+const _configuredUrl = _rawUrl ? _rawUrl.replace(/\/+$/, '') : '';
+
 if (import.meta.env.PROD && !_configuredUrl) {
   // SEC-001: Fail closed. Do not silently fall back to localhost in production.
   // This prevents the app from sending sensitive Bearer tokens to a local service on port 3001.

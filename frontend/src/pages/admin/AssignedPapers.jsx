@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Search, UserCheck, UserX, RefreshCw, ChevronDown, ChevronUp, FileText, Calendar, User, Download } from 'lucide-react'
+import { Search, UserCheck, UserX, RefreshCw, ChevronDown, ChevronUp, FileText, Calendar, User } from 'lucide-react'
 import { useToast } from '../../components/Toast'
 import { supabase } from '../../lib/supabase'
 import ConfirmModal from '../../components/ConfirmModal'
@@ -319,7 +319,7 @@ export default function AssignedPapers() {
                       borderTop: '1px solid var(--border)',
                       display: 'flex', flexDirection: 'column', gap: '1rem'
                     }}>
-                      {/* Abstract */}
+                      {/* Abstract — SEC-004: render as text only, never as href */}
                       <div>
                         <p style={{
                           fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase',
@@ -327,21 +327,13 @@ export default function AssignedPapers() {
                         }}>
                           Abstract
                         </p>
-                        {paper.abstract?.startsWith('http') ? (
-                          <a href={paper.abstract} target="_blank" rel="noreferrer"
-                            className="btn btn-outline btn-sm"
-                            style={{ display: 'inline-flex', gap: '0.35rem' }}>
-                            <Download size={13} /> Download Abstract PDF
-                          </a>
-                        ) : (
-                          <p style={{
-                            fontSize: '0.84rem', lineHeight: 1.65,
-                            color: 'var(--foreground)', whiteSpace: 'pre-wrap',
-                            maxHeight: '180px', overflowY: 'auto'
-                          }}>
-                            {paper.abstract || '—'}
-                          </p>
-                        )}
+                        <p style={{
+                          fontSize: '0.84rem', lineHeight: 1.65,
+                          color: 'var(--foreground)', whiteSpace: 'pre-wrap',
+                          maxHeight: '180px', overflowY: 'auto'
+                        }}>
+                          {paper.abstract || '—'}
+                        </p>
                       </div>
 
                       {/* Full Manuscript */}

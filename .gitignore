@@ -9,6 +9,8 @@ node_modules/
 .env.development.local
 .env.test.local
 .env.production.local
+# Cloudflare Wrangler local dev secrets
+.dev.vars
 
 # Logs
 logs
@@ -22,6 +24,10 @@ lerna-debug.log*
 # Build
 dist/
 build/
+
+# Cloudflare Wrangler build artifacts
+.wrangler/
+.vercel/
 
 # OS
 .DS_Store

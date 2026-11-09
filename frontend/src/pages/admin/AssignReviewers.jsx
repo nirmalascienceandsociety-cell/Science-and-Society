@@ -263,7 +263,7 @@ export default function AssignReviewers() {
   const categorised = useMemo(() => ({
     reworks: journals.filter(j => (j.resubmission_count ?? 0) > 0),
     all:     journals,
-  }), [journals, assignments])
+  }), [journals])
 
   const filteredJournals = useMemo(() => {
     const base = filter === 'all' ? journals : (categorised[filter] ?? [])
@@ -640,11 +640,8 @@ export default function AssignReviewers() {
                       >
                         <div>
                           <p style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--muted-foreground)', marginBottom: '0.35rem' }}>Abstract</p>
-                          {j.abstract?.startsWith('http') ? (
-                            <a href={j.abstract} target="_blank" rel="noreferrer" className="btn btn-outline btn-sm">Download Abstract PDF</a>
-                          ) : (
-                            <p style={{ fontSize: '0.82rem', lineHeight: 1.65, color: 'var(--foreground)', whiteSpace: 'pre-wrap', maxHeight: '160px', overflowY: 'auto', margin: 0 }}>{j.abstract || 'No abstract provided.'}</p>
-                          )}
+                          {/* SEC-004: Abstract is plain text — never use as href. */}
+                          <p style={{ fontSize: '0.82rem', lineHeight: 1.65, color: 'var(--foreground)', whiteSpace: 'pre-wrap', maxHeight: '160px', overflowY: 'auto', margin: 0 }}>{j.abstract || 'No abstract provided.'}</p>
                         </div>
 
                         {j.keywords && (

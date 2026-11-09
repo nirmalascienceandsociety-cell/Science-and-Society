@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { Calendar, Users, FileText, AlertCircle, Eye, Quote, BookmarkCheck } from 'lucide-react'
+import { Calendar, Users, FileText, AlertCircle, Eye, Quote } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { sendNotification, API_BASE } from '../lib/api'
 import { AnimatedSection } from '../components/ui/AnimatedSection'

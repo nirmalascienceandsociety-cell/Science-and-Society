@@ -9,7 +9,7 @@ const { sendRegisterOTP, verifyRegisterOTP, sendResetOTP, verifyResetOTP, sendEm
 const { notifyUpload, notifyAssign, notifyUnassignReviewer, notifyReview, notifyDecision, notifyBan, notifyUnban, notifyAccountDeleted, notifyReviewerApproved, notifyReviewerRejected, notifySentForReview, notifyRework, notifyResubmit, notifyPublish, notifyPaperRequest, notifyPaperRequestRejected, notifyPaperDelivery, notifyPaperDeleted, notifyContact, replyContact, notifyReviewerDeclinedAssignment, notifyForceUnassign } = require('./controllers/notifyController');
 const { resubmitJournal } = require('./controllers/resubmitController');
 const { requireAuth, requireAdmin } = require('./middleware/requireAuth');
-// node-cron removed: does not work on Vercel serverless. The account deletion cron
+// node-cron removed: does not work on serverless platforms. The account deletion cron
 // is replaced by a Supabase Scheduled Edge Function (see HOSTING.md for setup).
 const { createClient } = require('@supabase/supabase-js');
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -41,7 +41,7 @@ async function removeStorageFiles(paths) {
 
 const app = express();
 
-// Trust the first proxy hop (Render/Vercel load balancer) so that
+// Trust the first proxy hop (Cloudflare / load balancer) so that
 // express-rate-limit uses the real client IP from X-Forwarded-For
 // instead of the proxy's IP, which would make per-IP limiting useless.
 app.set('trust proxy', 1);
@@ -82,8 +82,17 @@ const allowedOrigins = process.env.NODE_ENV === 'production' && envOrigins.lengt
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, curl, Vercel internal calls)
-    if (!origin) return callback(null, true);
+    // SEC-011: In production, deny requests with no Origin header.
+    // A missing Origin is acceptable for health checks but not for general API calls.
+    // Server-to-server callers should set a shared secret instead.
+    if (!origin) {
+      if (process.env.NODE_ENV === 'production') {
+        // Allow health-check path without origin; block everything else
+        return callback(null, false);
+      }
+      // In development, allow no-origin (curl, Postman, etc.)
+      return callback(null, true);
+    }
     
     const normalizedOrigin = origin.replace(/\/$/, '');
     if (allowedOrigins.includes(normalizedOrigin)) {
@@ -110,7 +119,7 @@ app.use((err, req, res, next) => {
 
 app.use(express.json({ limit: '1mb' }));
 
-// Health Check Endpoint (Required for Railway/Render/Vercel)
+// Health Check Endpoint (Required for Cloudflare Workers / uptime monitors)
 app.get('/health', async (req, res) => {
   try {
     const { error } = await supabase.from('profiles').select('id').limit(1);
@@ -140,6 +149,15 @@ const apiLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// SEC-008: Dedicated tight limiter for view-count metrics — prevents artificial inflation / DoS
+const metricsLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 20, // 20 view pings per IP per minute (legitimate browsing never exceeds this)
+  message: { error: 'Too many view requests, please slow down.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // Apply rate limiters
 app.use('/api', apiLimiter);
 app.use('/api/auth', otpLimiter);
@@ -158,21 +176,32 @@ app.post('/api/auth/cancel-deletion', requireAuth, cancelDeletion);
 app.post('/api/notify/paper-request', otpLimiter, notifyPaperRequest);
 app.post('/api/notify/contact', otpLimiter, notifyContact);
 
-// Metrics Route
-app.post('/api/metrics/paper-view/:id', async (req, res) => {
+// Metrics Route (SEC-008: add metricsLimiter + only allow published paper IDs)
+app.post('/api/metrics/paper-view/:id', metricsLimiter, async (req, res) => {
   try {
     const journalId = req.params.id;
     if (!journalId || typeof journalId !== 'string') {
       return res.status(400).json({ error: 'Invalid journal ID' });
     }
 
+    // SEC-008: Verify the paper is actually published before incrementing — prevents
+    // DoS with random UUIDs and metric stuffing on non-public papers.
+    const { data: check } = await supabase
+      .from('journals')
+      .select('id')
+      .eq('id', journalId)
+      .eq('status', 'published')
+      .maybeSingle();
+
+    if (!check) {
+      // Return 200 silently — don't reveal whether the ID exists (enumeration)
+      return res.status(200).json({ success: true });
+    }
+
     const { error } = await supabase.rpc('increment_paper_views', { p_journal_id: journalId });
     if (error) {
-      // Fallback update if RPC is not available in environment
-      const { data: current } = await supabase.from('journals').select('views_count').eq('id', journalId).single();
-      if (current) {
-        await supabase.from('journals').update({ views_count: (current.views_count || 0) + 1 }).eq('id', journalId);
-      }
+      console.error('increment_paper_views RPC error:', error.message);
+      // Don't expose internal error details
     }
 
     res.status(200).json({ success: true });
@@ -308,20 +337,26 @@ app.post('/api/student/journals/:id/delete', requireAuth, async (req, res) => {
 });
 
 // Global Error Handler to prevent stack trace leaks
-if (process.env.SENTRY_DSN) {
-  Sentry.setupExpressErrorHandler(app);
-}
+// SEC-009: Sentry import removed — @sentry/node is not installed.
+// If you add Sentry in future: npm install @sentry/node and uncomment.
+// if (process.env.SENTRY_DSN) {
+//   const Sentry = require('@sentry/node');
+//   Sentry.init({ dsn: process.env.SENTRY_DSN, environment: process.env.NODE_ENV });
+//   Sentry.setupExpressErrorHandler(app);
+// }
 
 app.use((err, req, res, next) => {
   console.error('Unhandled Error:', err.stack || err);
   res.status(500).json({ error: 'Internal Server Error' });
 });
 
-// Export Express app for Vercel and tests
+// Export Express app for tests, Workers, and local development
 module.exports = app;
 
-// Start local/persistent server only when running outside Vercel
-if (process.env.VERCEL !== '1' && process.env.NODE_ENV !== 'test') {
+// Start local/persistent server only when invoked directly (node index.js)
+// When imported by worker.mjs or test suites, require.main !== module so
+// the importer controls server binding.
+if (require.main === module && process.env.NODE_ENV !== 'test') {
   const PORT = process.env.PORT || 3001;
 
   const server = app.listen(PORT, '0.0.0.0', () => {
@@ -340,6 +375,16 @@ if (process.env.VERCEL !== '1' && process.env.NODE_ENV !== 'test') {
 
   process.on('SIGTERM', () => {
     console.log('SIGTERM signal received: closing HTTP server...');
+    server.close(() => {
+      console.log('HTTP server closed.');
+      process.exit(0);
+    });
+    setTimeout(() => process.exit(1), 10000).unref();
+  });
+
+  // SEC-C: Handle Ctrl-C / container stop (SIGINT) the same way as SIGTERM
+  process.on('SIGINT', () => {
+    console.log('SIGINT signal received: closing HTTP server...');
     server.close(() => {
       console.log('HTTP server closed.');
       process.exit(0);

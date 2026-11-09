@@ -1,3 +1,13 @@
+-- ⚠️  WARNING: DO NOT RUN THIS FILE ON PRODUCTION AFTER safe_update_only.sql ⚠️
+-- This file redefines published_issues WITHOUT the email-stripping and security hardening
+-- applied by safe_update_only.sql. Running it would re-expose file_url, status, and raw
+-- authors (including author emails) to anonymous visitors.
+--
+-- The views_count / citations_count columns and the increment_paper_views RPC from this
+-- file have been merged into safe_update_only.sql (the canonical migration script).
+-- Only run this file on a fresh/dev database BEFORE running safe_update_only.sql.
+-- ─────────────────────────────────────────────────────────────────────────────
+
 -- Migration: Add Paper Metrics (Views & Citations)
 ALTER TABLE public.journals 
 ADD COLUMN IF NOT EXISTS views_count INTEGER NOT NULL DEFAULT 0,

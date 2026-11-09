@@ -1,0 +1,29 @@
+name = "ss-backend"
+main = "worker.mjs"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat", "nodejs_compat_populate_process_env"]
+
+# Cloudflare Workers — no routes needed if you use a custom domain or the
+# default *.workers.dev subdomain. Uncomment and fill in if using a custom domain:
+# [env.production]
+# routes = [{ pattern = "api.yourdomain.com/*", zone_name = "yourdomain.com" }]
+
+[observability]
+enabled = true
+
+# ── Local Development ────────────────────────────────────────────────────────
+# DO NOT put real secrets here. Use `wrangler secret put SECRET_NAME` to store
+# secrets in Cloudflare's encrypted secret store for production.
+# For local dev, create a `.dev.vars` file (gitignored) with the same vars as .env
+# Example .dev.vars:
+#   PORT=3001
+#   SUPABASE_URL=https://your-ref.supabase.co
+#   SUPABASE_SERVICE_ROLE_KEY=eyJ...
+#   EMAIL_USER=your@gmail.com
+#   EMAIL_PASS=your-app-password
+#   SMTP_HOST=smtp.gmail.com
+#   SMTP_PORT=465
+#   APP_URL=http://localhost:5173
+#   FRONTEND_URL=http://localhost:5173
+#   NODE_ENV=development
+

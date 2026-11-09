@@ -14,7 +14,12 @@ function ElegantGridBackgroundCore() {
 
   return (
     <div style={{
-      position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', overflow: 'hidden',
+      position: 'fixed', inset: 0, zIndex: 0,
+      // MOBILE SCROLL FIX: touchAction none prevents this purely-decorative
+      // fixed overlay from consuming touch events on Android browsers.
+      pointerEvents: 'none',
+      touchAction: 'none',
+      overflow: 'hidden',
       background: 'var(--background)'
     }}>
       {/* Base Grid Layer (Deepest) */}
@@ -57,6 +62,7 @@ export function ElegantGridBackground() {
         position: 'fixed', inset: 0, zIndex: -1,
         background: 'var(--background)', overflow: 'hidden',
         pointerEvents: 'none',
+        touchAction: 'none',
       }}>
         {/* Static Background Base */}
         <div style={{

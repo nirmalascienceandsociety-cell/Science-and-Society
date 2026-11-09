@@ -74,7 +74,9 @@ function BackgroundElementsMobile() {
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 1,
-      pointerEvents: 'none', overflow: 'hidden',
+      pointerEvents: 'none',
+      touchAction: 'none',
+      overflow: 'hidden',
       contain: 'layout style',
     }}>
       <GlowOrb x="4%" y="6%" size={80} color="rgba(29,78,216,0.15)" delay={0} duration={7} floatY={20} />
@@ -88,7 +90,9 @@ function BackgroundElementsDesktop() {
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 1,
-      pointerEvents: 'none', overflow: 'hidden',
+      pointerEvents: 'none',
+      touchAction: 'none',
+      overflow: 'hidden',
       contain: 'layout style',
     }}>
       {/* ─── LEFT SIDE cluster ─── */}

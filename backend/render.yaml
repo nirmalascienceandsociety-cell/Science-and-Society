@@ -1,21 +1,20 @@
-# render.yaml — Render deployment config for the backend
-# Reference: https://render.com/docs/blueprint-spec
+# render.yaml — ARCHIVED (kept for reference only)
 #
-# To use: link your GitHub repo in the Render dashboard and this file
-# will be detected automatically (Infrastructure as Code / Blueprint).
-# Alternatively, you can configure the service manually via the dashboard.
-
-services:
-  - type: web
-    name: ss-backend
-    runtime: node
-    rootDir: backend
-    buildCommand: npm ci --omit=dev
-    startCommand: node index.js
-    healthCheckPath: /health
-    envVars:
-      - key: NODE_ENV
-        value: production
-      # Set these in the Render dashboard (never hardcode secrets here):
-      # EMAIL_USER, EMAIL_PASS, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
-      # APP_URL, FRONTEND_URL, SENTRY_DSN (optional)
+# This project has migrated from Render to Cloudflare Workers.
+# This file is no longer used for deployment.
+#
+# To deploy the backend to Cloudflare Workers:
+#   cd backend
+#   wrangler login
+#   wrangler secret put SUPABASE_URL
+#   wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+#   wrangler secret put EMAIL_USER
+#   wrangler secret put EMAIL_PASS
+#   wrangler secret put SMTP_HOST
+#   wrangler secret put SMTP_PORT
+#   wrangler secret put APP_URL
+#   wrangler secret put FRONTEND_URL
+#   wrangler secret put NODE_ENV
+#   wrangler deploy
+#
+# See backend/wrangler.toml for the Cloudflare Workers configuration.

@@ -20,6 +20,9 @@ export function AuthProvider({ children }) {
       } else {
         setLoading(false)
       }
+    }).catch((err) => {
+      console.error('AuthContext: failed to get session:', err)
+      setLoading(false)
     })
 
     // Listen for auth state changes (login, logout, token refresh)
