@@ -7,6 +7,10 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/Toast';
 import { supabase } from '../lib/supabase';
 
+const handleForgotPassword = (email, navigate) => {
+  navigate('/forgot-password', email ? { state: { prefillEmail: email } } : {});
+};
+
 export default function Login() {
   const [form, setForm] = useState({ email: '', password: '' });
   const [loading, setLoading] = useState(false);
@@ -75,7 +79,13 @@ export default function Login() {
           <div className="form-group">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <label htmlFor="login-password" style={{ fontWeight: 600, fontSize: '0.9rem' }}>Password</label>
-              <Link to="/forgot-password" style={{ fontSize: '0.85rem', color: 'var(--primary)', textDecoration: 'none', fontWeight: 500 }}>Forgot password?</Link>
+              <button
+                type="button"
+                onClick={() => handleForgotPassword(form.email.trim(), navigate)}
+                style={{ fontSize: '0.85rem', color: 'var(--primary)', background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontWeight: 500 }}
+              >
+                Forgot password?
+              </button>
             </div>
             <div style={{ position: 'relative' }}>
               <input 

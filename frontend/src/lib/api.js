@@ -8,7 +8,11 @@ if (import.meta.env.PROD && !_configuredUrl) {
 if (import.meta.env.PROD && !_configuredUrl.startsWith('https://')) {
   throw new Error('CRITICAL: VITE_API_URL must use HTTPS in production.');
 }
-export const API_BASE = _configuredUrl || 'http://localhost:3001';
+// In development, if VITE_API_URL points to local server or is not explicitly external,
+// default to relative path ('') to utilize Vite's dev proxy and avoid CORS/browser port blocking.
+export const API_BASE = (import.meta.env.DEV && (!_configuredUrl || _configuredUrl.includes('localhost') || _configuredUrl.includes('127.0.0.1')))
+  ? ''
+  : (_configuredUrl || 'http://localhost:3001');
 
 import { supabase } from './supabase';
 

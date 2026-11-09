@@ -12,8 +12,6 @@
   "dependencies": {
     "@react-three/drei": "^9.122.0",
     "@react-three/fiber": "^8.18.0",
-    "@sentry/react": "^10.72.0",
-    "@sentry/vite-plugin": "^5.4.0",
     "@supabase/supabase-js": "^2.103.0",
     "@tabler/icons-react": "^3.44.0",
     "framer-motion": "^12.40.0",

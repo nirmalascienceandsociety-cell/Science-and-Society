@@ -1,18 +1,4 @@
 require('dotenv').config();
-const Sentry = require('@sentry/node');
-const { nodeProfilingIntegration } = require('@sentry/profiling-node');
-
-if (process.env.SENTRY_DSN) {
-  const tracesSampleRate = parseFloat(process.env.SENTRY_TRACES_SAMPLE_RATE || '0.1');
-  Sentry.init({
-    dsn: process.env.SENTRY_DSN,
-    integrations: [
-      nodeProfilingIntegration(),
-    ],
-    tracesSampleRate,
-    profilesSampleRate: tracesSampleRate,
-  });
-}
 
 const express = require('express');
 const cors = require('cors');
@@ -60,21 +46,9 @@ const app = express();
 // instead of the proxy's IP, which would make per-IP limiting useless.
 app.set('trust proxy', 1);
 
-// Secure HTTP Headers with explicit Content Security Policy (U-7 fix)
+// Secure HTTP Headers (API server returns JSON)
 app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'none'"],
-      scriptSrc: ["'none'"],
-      styleSrc: ["'none'"],
-      imgSrc: ["'none'"],
-      connectSrc: ["'self'"],
-      fontSrc: ["'none'"],
-      objectSrc: ["'none'"],
-      frameAncestors: ["'none'"],
-      formAction: ["'none'"],
-    },
-  },
+  contentSecurityPolicy: false,
   // Prevent browsers from sniffing MIME type
   noSniff: true,
   // Enforce HTTPS for 1 year
@@ -89,22 +63,33 @@ app.use(helmet({
   hidePoweredBy: true,
 }));
 
-// Secure CORS: In production (FRONTEND_URL is set), only allow that origin.
-// In development (no FRONTEND_URL), allow localhost as usual.
-// API-003: Removing hardcoded localhost from production CORS prevents
-// a deployed user's browser from being able to hit a rogue localhost service.
-const allowedOrigins = process.env.FRONTEND_URL
-  ? [process.env.FRONTEND_URL]
-  : ['http://localhost:5173', 'http://localhost:3000'];
+// Secure CORS configuration
+const envOrigins = (process.env.FRONTEND_URL || '')
+  .split(',')
+  .map(u => u.trim().replace(/\/$/, ''))
+  .filter(Boolean);
+
+const devOrigins = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000'
+];
+
+const allowedOrigins = process.env.NODE_ENV === 'production' && envOrigins.length > 0
+  ? envOrigins
+  : [...new Set([...envOrigins, ...devOrigins])];
 
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (mobile apps, curl, Vercel internal calls)
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin) return callback(null, true);
+    
+    const normalizedOrigin = origin.replace(/\/$/, '');
+    if (allowedOrigins.includes(normalizedOrigin)) {
       return callback(null, true);
     }
-    // Return a plain false (not an Error) so cors() will NOT pass to Express error handler.
-    // We also attach a marker so we can send a clean 403 via the corsBlocker middleware below.
+    
     const err = new Error('CORS Policy: Origin not allowed');
     err.status = 403;
     return callback(err, false);

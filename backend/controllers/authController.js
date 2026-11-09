@@ -243,9 +243,9 @@ exports.sendResetOTP = async (req, res) => {
       });
     }
   } else {
-    // Deliberate delay to prevent timing attacks, then return fake success for non-existent emails
+    // Deliberate delay to prevent timing attacks
     await new Promise(resolve => setTimeout(resolve, Math.random() * 500 + 500));
-    return res.status(200).json({ message: 'If an active account exists with this email address, a password reset code has been sent.' });
+    return res.status(404).json({ error: 'No account found with this email address. Please check the email or create a new account.' });
   }
 
   const otp = generateOTP();

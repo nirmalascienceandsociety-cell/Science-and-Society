@@ -1,59 +1,78 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useState, useEffect, useCallback } from 'react'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { BookOpen, Home, Eye, EyeOff, Mail, ShieldCheck, KeyRound } from 'lucide-react'
 import { API_BASE } from '../lib/api'
 
 
 export default function ForgotPassword() {
-  const navigate = useNavigate()
+  const navigate  = useNavigate()
+  const location  = useLocation()
 
-  // Steps: 'email' → 'reset' → 'success'
-  const [step, setStep] = useState('email')
+  // If Login passed an email via router state, capture it
+  const prefillEmail = location.state?.prefillEmail ?? ''
 
-  const [email, setEmail] = useState('')
-  const [otpInput, setOtpInput] = useState('')
+  // Steps: 'email' → 'otp-sending' → 'reset' → 'success'
+  const [step, setStep] = useState(prefillEmail ? 'otp-sending' : 'email')
+
+  const [email,       setEmail]       = useState(prefillEmail)
+  const [otpInput,    setOtpInput]    = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
 
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [loading,       setLoading]       = useState(false)
+  const [error,         setError]         = useState('')
   const [passwordError, setPasswordError] = useState('')
 
-  /* ── Helpers ──────────────────────────────────────────── */
+  /* ── Core OTP sender (shared by auto-send and manual submit) ──── */
 
-  const validatePassword = (pwd) => {
-    if (pwd.length < 8) return 'Password must be at least 8 characters.'
-    if (!/[0-9]/.test(pwd)) return 'Password must contain at least one number.'
-    if (!/[A-Z]/.test(pwd)) return 'Password must contain at least one uppercase letter.'
-    return ''
-  }
-
-  /* ── Step 1 – Send OTP ───────────────────────────────── */
-
-  const handleSendOtp = async (e) => {
-    e.preventDefault()
+  const sendOtp = useCallback(async (emailToSend) => {
     setError('')
     setLoading(true)
-
     try {
       const res = await fetch(`${API_BASE}/api/auth/reset-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email })
+        body: JSON.stringify({ email: emailToSend })
       })
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Failed to send OTP')
-      }
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to send OTP')
       setStep('reset')
     } catch (err) {
-      setError(err.message || 'Something went wrong. Please try again.')
+      if (err.name === 'TypeError' && err.message?.includes('fetch')) {
+        setError('Unable to reach the server. Please try again shortly.')
+      } else {
+        setError(err.message || 'Something went wrong. Please try again.')
+      }
+      // Fall back to the email entry step so the user can correct the address
+      setStep('email')
     }
-
     setLoading(false)
+  }, [])
+
+  /* ── Auto-send OTP when prefilled email is present ──────────── */
+
+  useEffect(() => {
+    if (prefillEmail && step === 'otp-sending') {
+      sendOtp(prefillEmail)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // run once on mount
+
+  /* ── Step 1 – Manual email form submit ──────────────────────── */
+
+  const handleSendOtp = (e) => {
+    e.preventDefault()
+    sendOtp(email.trim())
   }
 
-  /* ── Step 2 – Update Password ────────────────────────── */
+  /* ── Step 2 – Verify OTP & update password ──────────────────── */
+
+  const validatePassword = (pwd) => {
+    if (pwd.length < 8)        return 'Password must be at least 8 characters.'
+    if (!/[0-9]/.test(pwd))    return 'Password must contain at least one number.'
+    if (!/[A-Z]/.test(pwd))    return 'Password must contain at least one uppercase letter.'
+    return ''
+  }
 
   const handleUpdatePassword = async (e) => {
     e.preventDefault()
@@ -61,43 +80,41 @@ export default function ForgotPassword() {
     setPasswordError('')
 
     const valErr = validatePassword(newPassword)
-    if (valErr) {
-      setPasswordError(valErr)
-      return
-    }
+    if (valErr) { setPasswordError(valErr); return }
 
     setLoading(true)
-
     try {
       const res = await fetch(`${API_BASE}/api/auth/verify-reset`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, otp: otpInput, newPassword })
       })
-      
       if (!res.ok) {
         const data = await res.json()
         throw new Error(data.error || 'Failed to update password')
       }
-      
       setStep('success')
       setTimeout(() => navigate('/login', { replace: true }), 3000)
     } catch (err) {
-      setError(err.message || 'Failed to update password. It is possible your OTP has expired.')
+      if (err.name === 'TypeError' && err.message?.includes('fetch')) {
+        setError('Unable to reach the server. Please try again shortly.')
+      } else {
+        setError(err.message || 'Failed to update password. Your OTP may have expired.')
+      }
     }
-
     setLoading(false)
   }
 
-  /* ── Render helpers ──────────────────────────────────── */
+  /* ── Step indicator ──────────────────────────────────────────── */
 
   const renderStepIndicator = () => {
     const steps = [
-      { key: 'email', label: 'Email', icon: <Mail size={14} /> },
-      { key: 'reset', label: 'Reset', icon: <KeyRound size={14} /> }
+      { key: 'email',  label: 'Email',  icon: <Mail      size={14} /> },
+      { key: 'reset',  label: 'Reset',  icon: <KeyRound  size={14} /> },
     ]
-    const currentIdx = steps.findIndex(s => s.key === step)
-
+    const currentIdx = steps.findIndex(s =>
+      step === 'otp-sending' ? s.key === 'email' : s.key === step
+    )
     return (
       <div className="fp-steps">
         {steps.map((s, i) => (
@@ -111,9 +128,19 @@ export default function ForgotPassword() {
     )
   }
 
+  /* ── Render ──────────────────────────────────────────────────── */
+
+  const cardTitle = step === 'success' ? 'All Done!' : 'Reset Password'
+  const cardDesc  = {
+    'email':       'Enter your email to receive a one-time password.',
+    'otp-sending': `Sending OTP to ${email}…`,
+    'reset':       'Enter the OTP sent to your email and choose a new password.',
+    'success':     'Your password has been updated.',
+  }[step]
+
   return (
     <div className="auth-page login-page-override">
-      {/* Top bar – same as Login */}
+      {/* Top bar */}
       <div className="login-topbar">
         <div className="login-topbar-brand">
           <BookOpen size={24} />
@@ -127,14 +154,8 @@ export default function ForgotPassword() {
       <div className="auth-wrapper login-wrapper-override">
         <div className="auth-card card">
           <div className="auth-card-header">
-            <div className="auth-card-title">
-              {step === 'success' ? 'All Done!' : 'Reset Password'}
-            </div>
-            <div className="auth-card-desc">
-              {step === 'email' && 'Enter your email to receive a one-time password.'}
-              {step === 'reset' && 'Enter the OTP and your new password.'}
-              {step === 'success' && 'Your password has been updated.'}
-            </div>
+            <div className="auth-card-title">{cardTitle}</div>
+            <div className="auth-card-desc">{cardDesc}</div>
 
             {step !== 'success' && (
               <div style={{ marginTop: '1.25rem' }}>{renderStepIndicator()}</div>
@@ -142,14 +163,22 @@ export default function ForgotPassword() {
           </div>
 
           <div className="auth-card-body">
-            {/* Global error banner */}
+            {/* Error banner */}
             {error && (
-              <div className="fp-error-banner">
-                {error}
+              <div className="fp-error-banner">{error}</div>
+            )}
+
+            {/* ── Sending OTP automatically (prefill flow) ── */}
+            {step === 'otp-sending' && (
+              <div style={{ textAlign: 'center', padding: '1.5rem 0' }}>
+                <span className="fp-spinner" style={{ display: 'inline-block', marginBottom: '0.75rem' }} />
+                <p style={{ color: 'var(--muted-foreground)', fontSize: '0.95rem' }}>
+                  Sending OTP to <strong>{email}</strong>…
+                </p>
               </div>
             )}
 
-            {/* ── Step: Email ───────────────────────── */}
+            {/* ── Step: Email ── */}
             {step === 'email' && (
               <form onSubmit={handleSendOtp} className="space-y-4">
                 <div className="form-group">
@@ -160,15 +189,15 @@ export default function ForgotPassword() {
                     className="input"
                     placeholder="your@email.com"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => { setEmail(e.target.value); setError('') }}
                     required
+                    autoFocus
                   />
                 </div>
 
-
                 <button type="submit" className="btn btn-primary w-full" disabled={loading}>
                   {loading ? (
-                    <span className="fp-btn-loading"><span className="fp-spinner" /> Sending...</span>
+                    <span className="fp-btn-loading"><span className="fp-spinner" /> Sending…</span>
                   ) : (
                     'Send OTP'
                   )}
@@ -176,11 +205,11 @@ export default function ForgotPassword() {
               </form>
             )}
 
-            {/* ── Step: Reset (OTP + New Password) ────────────────── */}
+            {/* ── Step: Reset (OTP + New Password) ── */}
             {step === 'reset' && (
               <form onSubmit={handleUpdatePassword} className="space-y-4">
                 <div className="fp-success-banner">
-                  OTP sent! Please check your email inbox and spam folder.
+                  OTP sent to <strong>{email}</strong>! Check your inbox and spam folder.
                 </div>
 
                 <div className="form-group">
@@ -194,6 +223,7 @@ export default function ForgotPassword() {
                     onChange={(e) => setOtpInput(e.target.value)}
                     autoComplete="one-time-code"
                     required
+                    autoFocus
                   />
                 </div>
 
@@ -230,12 +260,12 @@ export default function ForgotPassword() {
 
                 <button type="submit" className="btn btn-primary w-full" disabled={loading}>
                   {loading ? (
-                    <span className="fp-btn-loading"><span className="fp-spinner" /> Updating password...</span>
+                    <span className="fp-btn-loading"><span className="fp-spinner" /> Updating password…</span>
                   ) : (
                     'Verify & Update Password'
                   )}
                 </button>
-                
+
                 <button
                   type="button"
                   className="btn btn-outline w-full"
@@ -243,26 +273,26 @@ export default function ForgotPassword() {
                   disabled={loading}
                   onClick={() => { setStep('email'); setError(''); setOtpInput('') }}
                 >
-                  Resend OTP
+                  Wrong email / Resend OTP
                 </button>
               </form>
             )}
 
-            {/* ── Step: Success ─────────────────────── */}
+            {/* ── Step: Success ── */}
             {step === 'success' && (
               <div className="fp-success-final">
                 <div className="fp-success-icon">
                   <ShieldCheck size={40} />
                 </div>
                 <p className="fp-success-text">
-                  Password updated successfully! Redirecting to login...
+                  Password updated successfully! Redirecting to login…
                 </p>
                 <div className="fp-progress-bar"><div className="fp-progress-fill" /></div>
               </div>
             )}
           </div>
 
-          {step === 'email' && (
+          {(step === 'email' || step === 'otp-sending') && (
             <div className="auth-card-footer">
               Remember your password?{' '}
               <Link to="/login" className="auth-link">Sign in</Link>

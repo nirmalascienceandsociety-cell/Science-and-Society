@@ -57,7 +57,7 @@ export default function ReviewerDashboard() {
         reviewStatus = 'pending_accept'
       } else {
         const rev = reviewsMap[a.journals.id]
-        if (rev && new Date(rev.created_at) >= new Date(a.created_at)) {
+        if (rev) {
           reviewStatus = 'completed'
         } else {
           reviewStatus = 'pending'

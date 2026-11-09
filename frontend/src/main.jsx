@@ -2,23 +2,6 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
 import './styles/globals.css'
-import * as Sentry from '@sentry/react'
-
-if (import.meta.env.VITE_SENTRY_DSN) {
-  Sentry.init({
-    dsn: import.meta.env.VITE_SENTRY_DSN,
-    integrations: [
-      Sentry.browserTracingIntegration(),
-      Sentry.replayIntegration({
-        maskAllText: true,
-        blockAllMedia: true,
-      }),
-    ],
-    tracesSampleRate: 0.1,
-    replaysSessionSampleRate: 0.1,
-    replaysOnErrorSampleRate: 1.0,
-  })
-}
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -32,9 +15,6 @@ class ErrorBoundary extends React.Component {
 
   componentDidCatch(error, errorInfo) {
     console.error('Unhandled React Error:', error, errorInfo)
-    if (import.meta.env.VITE_SENTRY_DSN) {
-      Sentry.captureException(error, { extra: errorInfo })
-    }
   }
 
   render() {

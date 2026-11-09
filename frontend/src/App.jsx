@@ -11,6 +11,7 @@ import { IntroAnimation } from './components/ui/IntroAnimation'
 import { ElegantGridBackground } from './components/ui/ElegantGridBackground'
 import { useState } from 'react'
 
+
 import Home from './pages/Home'
 import Login from './pages/Login'
 import Register from './pages/Register'
@@ -319,6 +320,7 @@ export default function App() {
                 {/* Fallback */}
                 <Route path="*" element={<PublicLayout><NotFound /></PublicLayout>} />
               </Routes>
+
             </ToastProvider>
           </AuthProvider>
         </ThemeProvider>
